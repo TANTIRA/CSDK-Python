@@ -53,6 +53,18 @@ class TokenNeverShownTest(unittest.TestCase):
         self.assertEqual(stub.seen[0][2]["Authorization"], "Bearer " + SECRET)
 
 
+class PlainHttpTest(unittest.TestCase):
+    def test_a_token_is_never_sent_over_plain_http_except_to_localhost(self):
+        for base in ("http://converge.example.com/api", "ftp://converge.example.com/api",
+                     "http://127.0.0.1.evil.example/api", "http://localhost@evil.example/api"):
+            with self.assertRaises(ConfigError) as e:
+                ConvergeClient(base, token=SECRET)
+            self.assertNotIn(SECRET, str(e.exception))
+        for base in ("https://converge.example.com/api", "http://127.0.0.1:8080/api",
+                     "http://localhost/api", "http://[::1]:9/api"):
+            ConvergeClient(base, token=SECRET)  # accepted
+
+
 class RedirectTest(unittest.TestCase):
     def test_a_redirect_is_refused_and_the_token_never_follows_it(self):
         elsewhere = Stub({("GET", "/steal"): ok({})})

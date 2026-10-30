@@ -9,7 +9,9 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-from .errors import ConvergeRPCError
+from .errors import ConfigError, ConvergeRPCError
+
+_LOCAL = {"localhost", "127.0.0.1", "::1"}
 
 
 class _NoRedirect(urllib.request.HTTPRedirectHandler):
@@ -38,6 +40,11 @@ class Transport:
     """Requests against one API base URL (e.g. ``https://host/api``)."""
 
     def __init__(self, base, auth, timeout=60):
+        # the one place a base URL is accepted: never a bearer token over plain http
+        u = urllib.parse.urlsplit(base)
+        if u.scheme != "https" and not (u.scheme == "http" and u.hostname in _LOCAL):
+            raise ConfigError("refusing %s://%s: the API base must be https (plain http only for"
+                              " localhost)" % (u.scheme or "?", u.hostname or "?"))
         self.base = base.rstrip("/")
         self._auth = auth
         self._timeout = timeout

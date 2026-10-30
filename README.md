@@ -83,11 +83,13 @@ client = FoundryClient("https://converge.example.com/api")   # or pass auth=User
 client.ontology.objects.Order.where(Order.object_type.total > 5).take(10)
 ```
 
-To install both from the platform's package index:
+To install both from the platform's package index, use **`--index-url` only**:
 
 ```sh
-pip install --extra-index-url https://converge.example.com/api/v2/osdk/pypi/simple/ converge-osdk-<ontology>
+pip install --index-url https://converge.example.com/api/v2/osdk/pypi/simple/ converge-osdk-<ontology>
 ```
+
+Do not add `--extra-index-url` for public PyPI in the same install. pip would then also look up `converge-sdk` and `converge-osdk-*` on PyPI, and whoever registered those names there could run code on your machine. The platform index serves everything the package needs.
 
 ## Not available yet
 
