@@ -65,8 +65,18 @@ class TypedClientTest(unittest.TestCase):
         orders.aggregate("count", group_by=[{"field": Order.object_type.total, "fixedWidth": 10}])
         with self.assertRaises(ValueError):
             orders.linked("o1", "nope")
-        with self.assertRaises(NotImplementedError):
-            ~(Order.object_type.total > 1)
+        total = Order.object_type.total
+        gt = {"type": "gt", "property": "total", "value": 1}
+        self.assertEqual((~(total > 1))._wire, {"type": "not", "conditions": [gt]})
+        self.assertEqual((~~(total > 1))._wire, gt)  # cancels: depth is capped at 5
+        self.assertEqual((total != 3)._wire, {"type": "not", "conditions": [
+            {"type": "eq", "property": "total", "value": 3}]})
+        self.assertEqual(total.is_null(False)._wire, {"type": "not", "conditions": [
+            {"type": "isNull", "property": "total", "value": True}]})
+        # subtract: the orders over 1 that are not o1
+        self.assertEqual(((total > 1) & ~Order.object_type.orderId.in_(["o1"]))._wire,
+                         {"type": "and", "conditions": [gt, {"type": "not", "conditions": [
+                             {"type": "eq", "property": "orderId", "value": "o1"}]}]})
         bodies = self.stub.json_bodies()
         where = {"type": "and", "conditions": [
             {"type": "gt", "property": "total", "value": 1},
