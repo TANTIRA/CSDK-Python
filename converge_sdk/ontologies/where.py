@@ -1,14 +1,14 @@
 """Where clauses and property references.
 
 The server's where grammar is eq, gt, gte, lt, lte, range, regex, isNull,
-and, or. It has no ``not``, no ``in`` and no "is not null", so ``~``,
-``!=`` and ``is_null(False)`` raise, and ``in_`` becomes an ``or`` of
-``eq``. and/or stay flat, because the server caps where depth at 5.
+and, or, not. ``~``, ``!=`` and ``is_null(False)`` become ``not``, and
+``in_`` (the server has no ``in``) becomes an ``or`` of ``eq``. and/or stay
+flat and ``~~`` cancels, because the server caps where depth at 5.
 """
 
 
 class Where:
-    """A where clause; ``&`` and ``|`` combine, ``~`` is refused."""
+    """A where clause; ``&``, ``|`` and ``~`` combine."""
 
     def __init__(self, wire):
         self._wire = wire
@@ -20,10 +20,9 @@ class Where:
         return Where(join("or", [self._wire, clause(other)]))
 
     def __invert__(self):
-        raise NotImplementedError(
-            "~ (not) is not supported: this server's where clause has no `not` "
-            "(eq, gt, gte, lt, lte, range, regex, isNull, and, or); use the opposite "
-            "comparison instead")
+        if self._wire.get("type") == "not":
+            return Where(self._wire["conditions"][0])
+        return Where({"type": "not", "conditions": [self._wire]})
 
     def __bool__(self):
         raise TypeError("combine where clauses with & and |, not `and` / `or`")
@@ -61,7 +60,8 @@ class Property:
         return self._cmp("eq", v)
 
     def __ne__(self, v):
-        raise NotImplementedError("!= is not supported: this server's where clause has no `not`")
+        # also true for an object with no value, like Foundry's not(eq)
+        return ~self._cmp("eq", v)
 
     def __gt__(self, v):
         return self._cmp("gt", v)
@@ -90,9 +90,9 @@ class Property:
         return self._cmp("regex", pattern)
 
     def is_null(self, value=True):
-        if not value:  # the server reads every isNull as "is null"
-            raise NotImplementedError("is_null(False) (not null) is not supported by this API")
-        return self._cmp("isNull", True)
+        # the server reads every isNull as "is null", so not-null is not(isNull)
+        w = self._cmp("isNull", True)
+        return w if value else ~w
 
     def asc(self):
         return {"property": self._wire, "direction": "asc"}

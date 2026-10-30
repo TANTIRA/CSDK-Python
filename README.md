@@ -70,7 +70,7 @@ value = o.query("customer_lifetime_value")(customer_rid="customer/c1")
 att = o.attachments.upload(b"...", "invoice.pdf", "application/pdf")
 ```
 
-The where grammar has `==`, `<`, `<=`, `>`, `>=`, `in_`, `range`, `regex` and `is_null()`, combined with `&` and `|`. The server has no `not`, so `~`, `!=` and `is_null(False)` raise.
+The where grammar has `==`, `<`, `<=`, `>`, `>=`, `in_`, `range`, `regex` and `is_null()`, combined with `&` and `|`. `~` negates a clause; `!=` and `is_null(False)` are negations too, so `!=` also matches objects with no value. On one object type, `|` is a union, `&` an intersection, and `a & ~b` subtracts `b` from `a`.
 
 ## Generated ontology packages
 
@@ -93,7 +93,7 @@ Do not add `--extra-index-url` for public PyPI in the same install. pip would th
 
 ## Not available yet
 
-Dataset views, projections, retention policies, Iceberg tables, set operations on object sets, media properties, and the SQL job list. The SDK only calls routes the server has today.
+Dataset views, projections, retention policies, Iceberg tables, set operations across object types, media properties, and the SQL job list. The SDK only calls routes the server has today.
 
 ## License
 
