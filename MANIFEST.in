@@ -1,0 +1,4 @@
+include LICENSE NOTICE README.md
+prune tests
+prune changelog
+prune .github

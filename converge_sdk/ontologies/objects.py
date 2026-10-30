@@ -1,0 +1,210 @@
+"""Object types, objects, object sets and linked objects."""
+from ..core.transport import quote
+from .where import Property, clause, join, wire_prop
+
+
+class Ontology:
+    """One ontology on one transport, and the object classes by api name
+    (a linked object comes back as its class when the client knows it)."""
+
+    def __init__(self, transport, ontology_rid, classes=None):
+        self.transport = transport
+        self.rid = ontology_rid
+        self.classes = dict(classes or {})  # api name -> Object subclass
+        self.root = "/v2/ontologies"
+        self.base = self.root + "/" + quote(ontology_rid)
+
+    def request(self, method, path, body=None):
+        return self.transport.request(method, self.base + path, body)
+
+
+class ObjectType:
+    """``Type.object_type.<prop>`` gives a Property for where / order_by."""
+
+    def __init__(self, api_name, primary_key, props, links=None):
+        self._api_name = api_name
+        self._primary_key = primary_key
+        self._props = props  # python name -> wire name
+        self._links = links or {}  # link type -> linked object type api name
+        for py, wire in props.items():
+            setattr(self, py, Property(wire))
+
+
+class Object:
+    """One object. A generated subclass sets ``object_type``; ``raw`` is the wire dict."""
+
+    object_type = None
+
+    def __init__(self, raw):
+        self._raw = raw
+        self.rid = raw.get("$rid")
+        for py, wire in (self.object_type._props.items() if self.object_type else ()):
+            setattr(self, py, raw.get(wire))
+
+    @property
+    def raw(self):
+        return self._raw
+
+    def __getitem__(self, wire_name):
+        return self._raw[wire_name]
+
+    def __repr__(self):
+        return "%s(%r)" % (type(self).__name__, self._raw)
+
+
+class Page:
+    def __init__(self, data, next_page_token, total_count=None):
+        self.data = data
+        self.next_page_token = next_page_token
+        self.total_count = total_count
+
+
+class Compute:
+    def __init__(self, fn):
+        self._fn = fn
+
+    def compute(self):
+        return self._fn()
+
+
+def untyped_class(api_name, primary_key=None):
+    """An Object subclass for a type known only by name (no generated code)."""
+    return type(str(api_name), (Object,), {"object_type": ObjectType(api_name, primary_key, {})})
+
+
+class ObjectSet:
+    def __init__(self, ontology, cls, where=None, order=None, select=None):
+        self._o = ontology
+        self._cls = cls
+        self._filter = where
+        self._order = order
+        self._select = select
+
+    def _path(self, suffix=""):
+        return "/objects/" + quote(self._cls.object_type._api_name) + suffix
+
+    def where(self, *clauses):
+        conds = ([self._filter] if self._filter else []) + [clause(c) for c in clauses]
+        return ObjectSet(self._o, self._cls, join("and", conds), self._order, self._select)
+
+    def order_by(self, order):
+        return ObjectSet(self._o, self._cls, self._filter, order, self._select)
+
+    def select(self, *properties):
+        """Load only these properties (``Type.object_type.<p>`` or names); the rest come back None."""
+        return ObjectSet(self._o, self._cls, self._filter, self._order,
+                         [wire_prop(p) for p in properties])
+
+    def page(self, page_size=None, page_token=None):
+        body = {"pageSize": page_size or 50}
+        if self._filter:
+            body["where"] = self._filter
+        if self._order:
+            body["orderBy"] = self._order
+        if page_token:
+            body["pageToken"] = page_token
+        if self._select is not None:
+            body["select"] = self._select
+        r = self._o.request("POST", self._path("/search"), body)
+        return Page([self._cls(o) for o in r.get("data") or []], r.get("nextPageToken"),
+                    r.get("totalCount"))
+
+    def iterate(self, page_size=None):
+        token = None
+        while True:
+            p = self.page(page_size=page_size, page_token=token)
+            for o in p.data:
+                yield o
+            token = p.next_page_token
+            if not token:
+                return
+
+    def take(self, n):
+        out = []
+        if n <= 0:
+            return out
+        for o in self.iterate(page_size=min(n, 1000)):
+            out.append(o)
+            if len(out) >= n:
+                break
+        return out
+
+    def linked(self, primary_key, link_type):
+        """The objects linked to one object ("c1" or "customer/c1") through link_type.
+
+        A generated type knows its links (an unknown one is a ValueError); an
+        untyped one sends any link name and the server answers."""
+        links = self._cls.object_type._links
+        target = links.get(link_type)
+        if target is None and (links or self._cls.object_type._props):
+            raise ValueError("%s has no link %r" % (self._cls.object_type._api_name, link_type))
+        return LinkedObjects(self._o, self._path("/" + quote(bare_key(primary_key)) + "/links/"
+                                                 + quote(link_type)),
+                             self._o.classes.get(target))
+
+    def get(self, primary_key):
+        """One object by primary key ("c1") or by its $rid ("customer/c1", what GET takes)."""
+        k = str(primary_key)
+        if "/" not in k:
+            k = self._cls.object_type._api_name.lower() + "/" + k
+        return self._cls(self._o.request("GET", self._path("/" + quote(k))))
+
+    def aggregate(self, type, field=None, group_by=None):
+        """count | sum | avg | min | max | exactDistinct | approximateDistinct over this set.
+
+        A group_by entry is a property, or ``{"field": p, "ranges": [[lo, hi], ...]}``
+        / ``{"field": p, "fixedWidth": w}``."""
+        agg = {"type": type}
+        if self._filter:
+            agg["where"] = self._filter
+        if field is not None:
+            agg["field"] = wire_prop(field)
+        if group_by:
+            agg["group_by"] = [{**g, "field": wire_prop(g["field"])} if isinstance(g, dict)
+                               else wire_prop(g) for g in group_by]
+        return self._o.request("POST", self._path("/aggregate"), {"aggregation": agg})
+
+    def count(self):
+        def run():
+            data = self.aggregate("count").get("data") or []
+            return data[0]["metrics"][0]["value"] if data else 0
+        return Compute(run)
+
+
+def bare_key(primary_key):
+    """The link routes take the bare primary key: "c1" from "c1" or from the $rid "customer/c1"."""
+    k = str(primary_key)
+    return k.split("/", 1)[1] if "/" in k else k
+
+
+class LinkedObjects:
+    """Objects linked to one object through one link type, as the caller may read them."""
+
+    def __init__(self, ontology, path, cls):
+        self._o = ontology
+        self._path = path
+        self._cls = cls  # None: a linked type the client does not know comes back as a dict
+
+    def _wrap(self, raw):
+        return self._cls(raw) if self._cls else raw
+
+    def page(self, page_size=None, page_token=None):
+        q = "?pageSize=%d" % (page_size or 100)
+        if page_token:
+            q += "&pageToken=" + quote(page_token)
+        r = self._o.request("GET", self._path + q) or {}
+        return Page([self._wrap(o) for o in r.get("data") or []], r.get("nextPageToken"))
+
+    def iterate(self, page_size=None):
+        token = None
+        while True:
+            p = self.page(page_size=page_size or 1000, page_token=token)
+            for o in p.data:
+                yield o
+            token = p.next_page_token
+            if not token:
+                return
+
+    def get(self, primary_key):
+        """One linked object; a ConvergeRPCError 404 when it is not linked."""
+        return self._wrap(self._o.request("GET", self._path + "/" + quote(bare_key(primary_key))))

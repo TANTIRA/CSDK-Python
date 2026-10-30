@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "converge-sdk"
+version = "0.1.0"
+description = "Python SDK for the Converge platform REST API (standard library only)"
+readme = "README.md"
+license = "Apache-2.0"
+license-files = ["LICENSE", "NOTICE"]
+requires-python = ">=3.9"
+authors = [{name = "PT ANTERO DAEMON TEKNOLOGI"}]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Typing :: Typed",
+]
+
+[project.urls]
+Source = "https://github.com/TANTIRA/CSDK-Python"
+
+[tool.setuptools.packages.find]
+include = ["converge_sdk*"]
+
+[tool.setuptools.package-data]
+converge_sdk = ["py.typed"]
