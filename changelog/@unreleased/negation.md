@@ -1,1 +1,1 @@
-- Where clauses can be negated: `~clause`, `prop != value` and `prop.is_null(False)` send the server's `not` (they used to raise). `a & ~b` subtracts one filter from another on one object type.
+- Where clauses can be negated: `~clause`, `prop != value` and `prop.is_null(False)` send the server's `not`. `a & ~b` subtracts one filter from another on one object type.

@@ -84,10 +84,16 @@ class ObjectSet:
         return "/objects/" + quote(self._cls.object_type._api_name) + suffix
 
     def where(self, *clauses):
+        if not clauses:
+            return self
         conds = ([self._filter] if self._filter else []) + [clause(c) for c in clauses]
         return ObjectSet(self._o, self._cls, join("and", conds), self._order, self._select)
 
     def order_by(self, order):
+        """One property: ``Type.object_type.<p>.asc()`` / ``.desc()``."""
+        if not (isinstance(order, dict) and set(order) == {"property", "direction"}
+                and isinstance(order["property"], str) and order["direction"] in ("asc", "desc")):
+            raise TypeError("order_by takes one property's .asc() or .desc()")
         return ObjectSet(self._o, self._cls, self._filter, order, self._select)
 
     def select(self, *properties):
@@ -105,7 +111,7 @@ class ObjectSet:
             body["pageToken"] = page_token
         if self._select is not None:
             body["select"] = self._select
-        r = self._o.request("POST", self._path("/search"), body)
+        r = self._o.request("POST", self._path("/search"), body) or {}
         return Page([self._cls(o) for o in r.get("data") or []], r.get("nextPageToken"),
                     r.get("totalCount"))
 
@@ -166,8 +172,8 @@ class ObjectSet:
 
     def count(self):
         def run():
-            data = self.aggregate("count").get("data") or []
-            return data[0]["metrics"][0]["value"] if data else 0
+            data = (self.aggregate("count") or {}).get("data") or []
+            return int(float(data[0]["metrics"][0]["value"])) if data else 0
         return Compute(run)
 
 

@@ -59,7 +59,8 @@ class Action:
                 opts["mode"] = action_config.mode
             if action_config.return_edits:
                 opts["returnEdits"] = action_config.return_edits
-            body["options"] = opts
+            if opts:
+                body["options"] = opts
         r = self._o.request("POST", "/actions/" + quote(self._api_name) + "/apply", body) or {}
         return types.SimpleNamespace(validation=r.get("validation"), edits=r.get("edits"))
 

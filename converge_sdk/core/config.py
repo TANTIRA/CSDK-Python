@@ -24,7 +24,11 @@ def _file_values(path):
     if not p.is_file():
         return {}
     parser = configparser.ConfigParser(interpolation=None)
-    parser.read(p, encoding="utf-8")
+    try:
+        parser.read(p, encoding="utf-8")
+    except (configparser.Error, UnicodeDecodeError):
+        # configparser's message quotes the offending line, which may be the token
+        raise ConfigError("%s is not a valid INI file" % path) from None
     return dict(parser["default"]) if parser.has_section("default") else {}
 
 

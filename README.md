@@ -32,7 +32,9 @@ The client needs your platform's API base URL (for example `https://converge.exa
 
    Make that file readable by you only (`chmod 600 ~/.converge/config`).
 
-The token is sent only as a bearer header to the host you configured. It never appears in a `repr()`, a log line or an error message. The client refuses HTTP redirects, so the token can never follow a redirect to another host.
+The token is sent only as a bearer header to the host you configured. It never appears in a `repr()`, a log line or an error message. The client refuses HTTP redirects, so the token can never follow a redirect to another host. It also refuses a plain-http base URL, except for `localhost`, `127.0.0.1` and `[::1]`, and a base URL with a user name or password in it.
+
+Pass `auth=lambda: get_fresh_token()` instead of `token` to fetch a token per request. A token with a space or line break (a trailing newline from a file, say) is refused with a `ConfigError` before anything is sent.
 
 ```python
 from converge_sdk import ConvergeClient
@@ -70,7 +72,7 @@ value = o.query("customer_lifetime_value")(customer_rid="customer/c1")
 att = o.attachments.upload(b"...", "invoice.pdf", "application/pdf")
 ```
 
-The where grammar has `==`, `<`, `<=`, `>`, `>=`, `in_`, `range`, `regex` and `is_null()`, combined with `&` and `|`. `~` negates a clause; `!=` and `is_null(False)` are negations too, so `!=` also matches objects with no value. On one object type, `|` is a union, `&` an intersection, and `a & ~b` subtracts `b` from `a`.
+The where grammar has `==`, `<`, `<=`, `>`, `>=`, `in_`, `range`, `regex`, `starts_with` and `is_null()`, combined with `&` and `|`. `== None` is `is_null()`. `~` negates a clause; `!=` and `is_null(False)` are negations too, so `!=` also matches objects with no value. On one object type, `|` is a union, `&` an intersection, and `a & ~b` subtracts `b` from `a`. Pages hold 1 to 1000 objects; use `page`, `iterate` or `take`.
 
 ## Generated ontology packages
 
@@ -86,8 +88,10 @@ client.ontology.objects.Order.where(Order.object_type.total > 5).take(10)
 To install both from the platform's package index, use **`--index-url` only**:
 
 ```sh
-pip install --index-url https://converge.example.com/api/v2/osdk/pypi/simple/ converge-osdk-<ontology>
+pip install --index-url "https://__token__:$CONVERGE_TOKEN@converge.example.com/api/v2/osdk/pypi/simple/" converge-osdk-<ontology>
 ```
+
+The user name is always `__token__`; the password is your token. To keep it out of your shell history, put `machine converge.example.com login __token__ password <your token>` in `~/.netrc` and leave it out of the URL.
 
 Do not add `--extra-index-url` for public PyPI in the same install. pip would then also look up `converge-sdk` and `converge-osdk-*` on PyPI, and whoever registered those names there could run code on your machine. The platform index serves everything the package needs.
 

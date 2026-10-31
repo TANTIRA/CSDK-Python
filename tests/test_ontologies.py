@@ -89,6 +89,22 @@ class TypedClientTest(unittest.TestCase):
         self.assertEqual(bodies[-1], {"aggregation": {"type": "count", "group_by": [
             {"field": "total", "fixedWidth": 10}]}})
 
+    def test_where_none_starts_with_and_set_edges(self):
+        total, oid = Order.object_type.total, Order.object_type.orderId
+        self.assertEqual((total == None)._wire, {"type": "isNull", "property": "total", "value": True})  # noqa: E711
+        self.assertEqual((total != None)._wire, {"type": "not", "conditions": [  # noqa: E711
+            {"type": "isNull", "property": "total", "value": True}]})
+        self.assertEqual(oid.starts_with("o.1(")._wire, {"type": "regex", "property": "orderId",
+                                                          "value": "o\\.1\\([\\s\\S]*"})
+        orders = self.c.ontology.objects.Order
+        self.assertIs(orders.where(), orders)
+        for bad in ("total", {"property": "total", "direction": "up"}, {"property": "total"}):
+            with self.assertRaises(TypeError):
+                orders.order_by(bad)
+        self.assertIsInstance(orders.count().compute(), int)
+        self.c.ontology.actions.place_order(order_id="o9", action_config=ActionConfig())
+        self.assertNotIn("options", self.stub.json_bodies()[-1])
+
     def test_actions_queries_and_attachments(self):
         o = self.c.ontology
         r = o.actions.place_order(order_id="o9",
