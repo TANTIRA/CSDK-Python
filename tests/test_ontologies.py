@@ -98,6 +98,7 @@ class TypedClientTest(unittest.TestCase):
                                                           "value": "o\\.1\\([\\s\\S]*"})
         orders = self.c.ontology.objects.Order
         self.assertIs(orders.where(), orders)
+        self.assertEqual([o.orderId for o in orders.list(page_size=1)], ["o1", "o1"])  # both pages
         for bad in ("total", {"property": "total", "direction": "up"}, {"property": "total"}):
             with self.assertRaises(TypeError):
                 orders.order_by(bad)

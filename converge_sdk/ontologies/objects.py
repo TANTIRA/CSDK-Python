@@ -131,6 +131,10 @@ class ObjectSet:
             if not token:
                 return
 
+    def list(self, page_size=None):
+        """Every object in the set, as a list (all pages: prefer iterate() or take() for big sets)."""
+        return [o for o in self.iterate(page_size=page_size)]
+
     def take(self, n):
         out = []
         if n <= 0:
