@@ -1,0 +1,1 @@
+- `ObjectSet.page()`, `iterate()` and `list()` take `apply_modifiers={property: modifier}` (OSDK `$applyModifiers`: `applyReducers`, `applyMainValue`, `applyReducersAndExtractMainValue`), sent as the search body's `applyModifiers`.

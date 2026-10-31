@@ -112,6 +112,21 @@ def untyped_class(api_name, primary_key=None):
     return type(str(api_name), (Object,), {"object_type": ObjectType(api_name, primary_key, {})})
 
 
+# OSDK $applyModifiers: what a property may come back as on page / iterate / list.
+MODIFIERS = ("applyReducers", "applyMainValue", "applyReducersAndExtractMainValue")
+
+
+def _modifiers(apply_modifiers):
+    """{property name: modifier} -> the wire body, checked here so a typo fails before the request."""
+    if not isinstance(apply_modifiers, dict):
+        raise TypeError("apply_modifiers takes {property: modifier}")
+    out = dict(apply_modifiers)
+    bad = [m for m in out.values() if m not in MODIFIERS]
+    if bad:
+        raise ValueError("apply_modifiers: %r is not one of %s" % (bad[0], ", ".join(MODIFIERS)))
+    return out
+
+
 class ObjectSet:
     def __init__(self, ontology, cls, where=None, order=None, select=None):
         self._o = ontology
@@ -141,7 +156,10 @@ class ObjectSet:
         return ObjectSet(self._o, self._cls, self._filter, self._order,
                          [wire_prop(p) for p in properties])
 
-    def page(self, page_size=None, page_token=None):
+    def page(self, page_size=None, page_token=None, apply_modifiers=None):
+        """One page. ``apply_modifiers`` ({property name: modifier}, MODIFIERS) reads an array
+        property as its reduced element and a struct as its main value; filters and order
+        still use the full value. The object type configures reducers / main values."""
         body = {"pageSize": page_size or 50}
         if self._filter:
             body["where"] = self._filter
@@ -151,23 +169,25 @@ class ObjectSet:
             body["pageToken"] = page_token
         if self._select is not None:
             body["select"] = self._select
+        if apply_modifiers is not None:
+            body["applyModifiers"] = _modifiers(apply_modifiers)
         r = self._o.request("POST", self._path("/search"), body) or {}
         return Page([self._cls(o, self._o) for o in r.get("data") or []], r.get("nextPageToken"),
                     r.get("totalCount"))
 
-    def iterate(self, page_size=None):
+    def iterate(self, page_size=None, apply_modifiers=None):
         token = None
         while True:
-            p = self.page(page_size=page_size, page_token=token)
+            p = self.page(page_size=page_size, page_token=token, apply_modifiers=apply_modifiers)
             for o in p.data:
                 yield o
             token = p.next_page_token
             if not token:
                 return
 
-    def list(self, page_size=None):
+    def list(self, page_size=None, apply_modifiers=None):
         """Every object in the set, as a list (all pages: prefer iterate() or take() for big sets)."""
-        return [o for o in self.iterate(page_size=page_size)]
+        return [o for o in self.iterate(page_size=page_size, apply_modifiers=apply_modifiers)]
 
     def take(self, n):
         out = []

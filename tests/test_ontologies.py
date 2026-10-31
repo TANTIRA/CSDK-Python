@@ -90,6 +90,23 @@ class TypedClientTest(unittest.TestCase):
         self.assertEqual(bodies[-1], {"aggregation": {"type": "count", "group_by": [
             {"field": "total", "fixedWidth": 10}]}})
 
+    def test_apply_modifiers_on_page_iterate_and_list(self):
+        orders = self.c.ontology.objects.Order
+        mods = {"total": "applyReducers", "orderId": "applyMainValue"}
+        orders.page(apply_modifiers=mods)
+        list(orders.iterate(page_size=1, apply_modifiers=mods))
+        orders.list(apply_modifiers={"total": "applyReducersAndExtractMainValue"})
+        orders.page()
+        bodies = self.stub.json_bodies()
+        wire = {"total": "applyReducers", "orderId": "applyMainValue"}
+        both = {"total": "applyReducersAndExtractMainValue"}
+        # iterate and list read two pages each, every page with the modifiers
+        self.assertEqual([b.get("applyModifiers") for b in bodies], [wire, wire, wire, both, both, None])
+        with self.assertRaises(ValueError):
+            orders.page(apply_modifiers={"total": "reduce"})
+        with self.assertRaises(TypeError):
+            orders.page(apply_modifiers=["total"])
+
     def test_where_none_starts_with_and_set_edges(self):
         total, oid = Order.object_type.total, Order.object_type.orderId
         self.assertEqual((total == None)._wire, {"type": "isNull", "property": "total", "value": True})  # noqa: E711
