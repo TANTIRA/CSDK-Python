@@ -37,6 +37,7 @@ def routes():
             ok({"data": [{"$rid": "customer/c1", "customerId": "c1", "name": "Ada"}], "nextPageToken": None}),
         ("POST", B + "/objects/Order/aggregate"):
             ok({"accuracy": "ACCURATE", "data": [{"group": {}, "metrics": [{"name": "count", "value": 2}]}]}),
+        ("POST", B + "/objects/Order/nearestNeighbors"): ok({"data": [], "skipped": 0}),
         ("POST", B + "/actions/place_order/apply"): ok({"validation": {"result": "VALID"}, "edits": None}),
         ("POST", B + "/actions/place_order/applyBatch"): ok({"results": [{}, {}], "edits": None}),
         ("POST", B + "/queries/score/execute"): ok({"value": 0.5}),
@@ -122,6 +123,9 @@ class TypedClientTest(unittest.TestCase):
                          {"field": "orderId", "maxGroupCount": 3}]}})
         with self.assertRaises(TypeError):
             orders.aggregate("count", metrics=[metric("count")])
+        orders.nearest_neighbors((1, 0.5), 3, Order.object_type.total)
+        self.assertEqual(self.stub.json_bodies()[-1], {"property": "total", "numNeighbors": 3,
+                                                      "query": {"type": "vector", "value": [1, 0.5]}})
         self.c.ontology.actions.place_order(order_id="o9", action_config=ActionConfig())
         self.assertNotIn("options", self.stub.json_bodies()[-1])
 

@@ -191,6 +191,16 @@ class ObjectSet:
                                else wire_prop(g) for g in group_by]
         return self._o.request("POST", self._path("/aggregate"), {"aggregation": agg})
 
+    def nearest_neighbors(self, query, num_neighbors, prop):
+        """The num_neighbors objects of this set whose vector property is closest to query
+        (exact cosine similarity, best first). The server's answer as a dict: ``data`` (objects
+        with ``$score``) and ``skipped`` (readable objects with no comparable vector)."""
+        body = {"property": wire_prop(prop), "numNeighbors": num_neighbors,
+                "query": {"type": "vector", "value": list(query)}}
+        if self._filter:
+            body["where"] = self._filter
+        return self._o.request("POST", self._path("/nearestNeighbors"), body)
+
     def count(self):
         def run():
             data = (self.aggregate("count") or {}).get("data") or []
