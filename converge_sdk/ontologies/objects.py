@@ -1,5 +1,6 @@
 """Object types, objects, object sets and linked objects."""
 from ..core.transport import quote
+from .media import Media, _reference
 from .where import Property, clause, join, wire_prop
 
 
@@ -21,11 +22,12 @@ class Ontology:
 class ObjectType:
     """``Type.object_type.<prop>`` gives a Property for where / order_by."""
 
-    def __init__(self, api_name, primary_key, props, links=None):
+    def __init__(self, api_name, primary_key, props, links=None, media=()):
         self._api_name = api_name
         self._primary_key = primary_key
         self._props = props  # python name -> wire name
         self._links = links or {}  # link type -> linked object type api name
+        self._media = frozenset(media)  # python names of media reference properties
         for py, wire in props.items():
             setattr(self, py, Property(wire))
 
@@ -35,11 +37,15 @@ class Object:
 
     object_type = None
 
-    def __init__(self, raw):
+    def __init__(self, raw, ontology=None):
         self._raw = raw
         self.rid = raw.get("$rid")
-        for py, wire in (self.object_type._props.items() if self.object_type else ()):
-            setattr(self, py, raw.get(wire))
+        ot = self.object_type
+        for py, wire in (ot._props.items() if ot else ()):
+            value = raw.get(wire)
+            if py in ot._media and value is not None and ontology is not None and self.rid:
+                value = Media(ontology, ot._api_name, self.rid, wire, _reference(value))
+            setattr(self, py, value)
 
     @property
     def raw(self):
@@ -112,7 +118,7 @@ class ObjectSet:
         if self._select is not None:
             body["select"] = self._select
         r = self._o.request("POST", self._path("/search"), body) or {}
-        return Page([self._cls(o) for o in r.get("data") or []], r.get("nextPageToken"),
+        return Page([self._cls(o, self._o) for o in r.get("data") or []], r.get("nextPageToken"),
                     r.get("totalCount"))
 
     def iterate(self, page_size=None):
@@ -153,7 +159,7 @@ class ObjectSet:
         k = str(primary_key)
         if "/" not in k:
             k = self._cls.object_type._api_name.lower() + "/" + k
-        return self._cls(self._o.request("GET", self._path("/" + quote(k))))
+        return self._cls(self._o.request("GET", self._path("/" + quote(k))), self._o)
 
     def aggregate(self, type, field=None, group_by=None):
         """count | sum | avg | min | max | exactDistinct | approximateDistinct over this set.
@@ -192,7 +198,7 @@ class LinkedObjects:
         self._cls = cls  # None: a linked type the client does not know comes back as a dict
 
     def _wrap(self, raw):
-        return self._cls(raw) if self._cls else raw
+        return self._cls(raw, self._o) if self._cls else raw
 
     def page(self, page_size=None, page_token=None):
         q = "?pageSize=%d" % (page_size or 100)

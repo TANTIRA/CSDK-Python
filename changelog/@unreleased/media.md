@@ -1,0 +1,1 @@
+- Media reference properties: `Media.get_media_content()`, `get_media_metadata()` and `get_media_reference()`; `client.ontology.media.get(...)` and `.upload(...)`; a generated object type marks its media properties with `ObjectType(..., media=...)`.

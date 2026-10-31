@@ -7,6 +7,7 @@ from ..core.config import resolve
 from ..core.transport import Transport
 from .actions import Action, BatchAction, Query
 from .attachments import Attachments
+from .media import MediaClient
 from .objects import ObjectSet, Ontology, untyped_class
 
 
@@ -21,6 +22,7 @@ class OntologyClient:
     def __init__(self, transport, ontology_rid):
         self._o = Ontology(transport, ontology_rid)
         self.attachments = Attachments(self._o)
+        self.media = MediaClient(self._o)
 
     def objects(self, api_name, primary_key=None):
         return ObjectSet(self._o, untyped_class(api_name, primary_key))
@@ -63,6 +65,7 @@ def client_class(ontology_rid, object_types, action_types, query_types=None, nam
                                                    for k, (w, p) in action_types.items()}),
             queries=types.SimpleNamespace(**{k: Query(o, w, p) for k, (w, p) in query_types.items()}),
             attachments=Attachments(o),
+            media=MediaClient(o),
         )
 
     return type(name, (), {"__init__": __init__, "ontology_rid": ontology_rid})
