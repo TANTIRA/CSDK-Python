@@ -96,6 +96,21 @@ class Property:
         # a full-match regex on the server; [\s\S] so multi-line values match too
         return self._cmp("regex", re.sub(r"([.*+?^${}()|\[\]\\])", r"\\\1", str(prefix)) + "[\\s\\S]*")
 
+    # Text search: whole words, case-insensitive, terms separated by whitespace or punctuation.
+    def contains_any_term(self, terms):
+        return self._cmp("containsAnyTerm", str(terms))
+
+    def contains_all_terms(self, terms):
+        return self._cmp("containsAllTerms", str(terms))
+
+    def contains_all_terms_in_order(self, terms):
+        """The terms as an adjacent phrase, in order."""
+        return self._cmp("containsAllTermsInOrder", str(terms))
+
+    def contains_all_terms_in_order_prefix_last_term(self, terms):
+        """As contains_all_terms_in_order, the last term matching as a prefix."""
+        return self._cmp("containsAllTermsInOrderPrefixLastTerm", str(terms))
+
     def is_null(self, value=True):
         # the server reads every isNull as "is null", so not-null is not(isNull)
         w = self._cmp("isNull", True)

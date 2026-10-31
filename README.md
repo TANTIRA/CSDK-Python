@@ -90,7 +90,7 @@ o.action("set_photo")(order_id="o9", photo=ref)   # an action writes it to the p
 
 The server checks the object and the media set before it answers. The content is untrusted, because the uploader chose its type. Showing an image, video or audio in an `<img>`, `<video>` or `<audio>` element is fine; never open other content (HTML, SVG) as a `blob:` or `data:` URL in a frame, tab or link, where it would run on your app's origin.
 
-The where grammar has `==`, `<`, `<=`, `>`, `>=`, `in_`, `range`, `regex`, `starts_with` and `is_null()`, combined with `&` and `|`. `== None` is `is_null()`. `~` negates a clause; `!=` and `is_null(False)` are negations too, so `!=` also matches objects with no value. On one object type, `|` is a union, `&` an intersection, and `a & ~b` subtracts `b` from `a`. Pages hold 1 to 1000 objects; use `page`, `iterate`, `take` or `list` (every object). `aggregate()` returns the server's answer as a dict, so there is nothing to convert.
+The where grammar has `==`, `<`, `<=`, `>`, `>=`, `in_`, `range`, `regex`, `starts_with`, `is_null()` and the text search methods `contains_any_term`, `contains_all_terms`, `contains_all_terms_in_order` and `contains_all_terms_in_order_prefix_last_term` (whole words, case-insensitive), combined with `&` and `|`. `== None` is `is_null()`. `~` negates a clause; `!=` and `is_null(False)` are negations too, so `!=` also matches objects with no value. On one object type, `|` is a union, `&` an intersection, and `a & ~b` subtracts `b` from `a`. Pages hold 1 to 1000 objects; use `page`, `iterate`, `take` or `list` (every object). `aggregate()` returns the server's answer as a dict, so there is nothing to convert.
 
 ## Generated ontology packages
 
