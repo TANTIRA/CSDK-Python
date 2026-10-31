@@ -1,0 +1,1 @@
+- Text search in where clauses: `contains_any_term`, `contains_all_terms`, `contains_all_terms_in_order` and `contains_all_terms_in_order_prefix_last_term`.

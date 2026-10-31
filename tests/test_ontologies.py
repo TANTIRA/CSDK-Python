@@ -98,6 +98,14 @@ class TypedClientTest(unittest.TestCase):
                                                           "value": "o\\.1\\([\\s\\S]*"})
         orders = self.c.ontology.objects.Order
         self.assertIs(orders.where(), orders)
+        self.assertEqual((oid.contains_any_term("a b") & ~oid.contains_all_terms_in_order("big re"))._wire,
+                         {"type": "and", "conditions": [
+                             {"type": "containsAnyTerm", "property": "orderId", "value": "a b"},
+                             {"type": "not", "conditions": [
+                                 {"type": "containsAllTermsInOrder", "property": "orderId", "value": "big re"}]}]})
+        self.assertEqual(oid.contains_all_terms("x")._wire["type"], "containsAllTerms")
+        self.assertEqual(oid.contains_all_terms_in_order_prefix_last_term("x")._wire["type"],
+                         "containsAllTermsInOrderPrefixLastTerm")
         self.assertEqual([o.orderId for o in orders.list(page_size=1)], ["o1", "o1"])  # both pages
         for bad in ("total", {"property": "total", "direction": "up"}, {"property": "total"}):
             with self.assertRaises(TypeError):
