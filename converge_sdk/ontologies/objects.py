@@ -1,6 +1,4 @@
 """Object types, objects, object sets and linked objects."""
-import json
-
 from ..core.transport import quote
 from .media import Media, _reference
 from .where import Property, clause, join, wire_prop
@@ -22,8 +20,9 @@ class Ontology:
 
 
 class GeoPoint(str):
-    """A geopoint: the server's ``"lat,lon"`` text (so it compares and serialises as before),
-    with ``latitude`` and ``longitude`` as floats."""
+    """A geopoint stored as ``"lat,lon"`` text: that text (so it compares and serialises as
+    before), with ``latitude`` and ``longitude`` as floats. A geopoint the server sends as
+    GeoJSON is left as sent."""
 
     def __new__(cls, latitude, longitude):
         lat, lon = float(latitude), float(longitude)
@@ -35,21 +34,14 @@ class GeoPoint(str):
 
     @classmethod
     def from_wire(cls, value):
-        """``"lat,lon"`` or a GeoJSON Point (a dict, or its JSON text) -> GeoPoint; else None."""
+        """``"lat,lon"`` -> GeoPoint; anything else (GeoJSON included) -> None."""
+        if not isinstance(value, str) or value.strip()[:1] == "{":
+            return None
         try:
-            if isinstance(value, str) and value.strip()[:1] == "{":
-                value = json.loads(value)
-            if isinstance(value, dict):
-                if value.get("type") != "Point":
-                    return None
-                lon, lat = value["coordinates"][:2]
-                return cls(lat, lon)
-            if isinstance(value, str):
-                lat, lon = (x.strip() for x in value.split(","))
-                return cls(lat, lon)
-        except (ValueError, TypeError, KeyError):
-            pass
-        return None
+            lat, lon = (x.strip() for x in value.split(","))
+            return cls(lat, lon)
+        except ValueError:
+            return None
 
     def __getnewargs__(self):  # copy and pickle rebuild it from its own text
         return tuple(str(self).split(","))

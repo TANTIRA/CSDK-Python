@@ -11,7 +11,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-from .config import Config
+from .config import Config, insecure_warning
 from .errors import ConfigError, ConvergeRPCError
 
 _LOCAL = {"localhost", "127.0.0.1", "::1"}
@@ -78,8 +78,9 @@ class Transport:
         if not isinstance(config, Config):
             raise ConfigError("config is a converge_sdk.Config")
         self._timeout = config.timeout if config.timeout is not None else timeout
-        self._headers = config.default_headers
+        self._headers = dict(config.default_headers)  # a later change to the Config's dict skips no check
         self._opener = _opener(config)
+        self._insecure = config.verify is False  # warns again on the first request
 
     def __repr__(self):
         return "Transport(%r)" % self.base
@@ -94,6 +95,9 @@ class Transport:
 
     def send(self, method, url, data=None, headers=None):
         """The raw response bytes of one request to a full URL."""
+        if self._insecure:
+            self._insecure = False
+            insecure_warning(stacklevel=4)
         req = urllib.request.Request(url, data=data, method=method, headers={
             **self._headers, "Authorization": "Bearer " + self._auth._get(), **(headers or {})})
         try:

@@ -2,7 +2,8 @@
 
 Each is a dict (JSON-serialisable, ``r["validation"]["result"]`` as before) whose keys
 also read as attributes, snake_case or as sent: ``r.validation.result``,
-``r.validation.submission_criteria``.
+``r.validation.submission_criteria``. A key named like a dict method (``items``, ``keys``,
+``get``, ...) or a dunder reads only by index: ``r["items"]``.
 """
 import re
 
@@ -22,10 +23,15 @@ class Record(dict):
             dict.__setitem__(self, k, _record(v))
 
     def __getattr__(self, name):
+        if name.startswith("__"):  # copy, pickle and friends probe dunders: never a key
+            raise AttributeError(name)
         for k in (name, re.sub(r"_([a-z0-9])", lambda m: m.group(1).upper(), name)):
             if k in self:
                 return self[k]
         raise AttributeError(name)
+
+    def __setattr__(self, name, value):  # r.x = v writes the key, as SimpleNamespace did
+        self[name] = _record(value)
 
     def __repr__(self):
         return "%s(%s)" % (type(self).__name__, dict.__repr__(self))

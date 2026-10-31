@@ -56,9 +56,15 @@ config = Config(default_headers={"X-Team": "ops"}, proxies={"https": "http://pro
 client = ConvergeClient(config=config)
 ```
 
-- `default_headers` go on every request. `Authorization` is refused with a `ConfigError`: the token comes from `token` or `auth` only.
+- `default_headers` go on every request, with their names lowercased.
+  - `Authorization` is refused with a `ConfigError`: the token comes from `token` or `auth` only.
+  - So are `Host`, `Proxy-Authorization` and the framing headers (`Content-Length`, `Transfer-Encoding`, `Connection`, `TE`, `Upgrade`).
 - `proxies` maps a scheme to a proxy URL, as urllib's `ProxyHandler` takes it. `{}` turns the proxy environment variables off.
-- `verify` is `True` (the system store), the path of a CA bundle file or directory, or `False`. `False` checks no certificate at all and warns, because anyone on the network path could then read your token. Use a CA bundle instead.
+  - An `http` or `all` proxy must be on `localhost`, because it would see plain-http requests with the token in them.
+  - An https request goes through a CONNECT tunnel, but the CONNECT line and any `user:pass@` in the proxy URL travel in plaintext, even with an `https://` proxy URL.
+- `verify` is `True` (the system store), the path of a PEM CA bundle file or directory, or `False`.
+  - A file that is not a PEM bundle is refused.
+  - `False` checks no certificate at all, so anyone on the network path could read your token. It raises an `InsecureConfigWarning` when you create the `Config` and again on the first request. Use a CA bundle instead.
 - `timeout`, in seconds, overrides the client's `timeout`.
 
 ## Datasets
@@ -135,13 +141,13 @@ client.ontology.objects.Order.where(Order.object_type.total > 5).take(10)
 client.datasets.get("ri.example.dataset.1")                  # the platform API on the same client
 ```
 
-The response types have their Python OSDK 2.x names. Each is a dict, so it serialises to JSON and indexes as before, and its keys also read as snake_case attributes:
+The response types have their Python OSDK 2.x names. Each is a dict, so it serialises to JSON and indexes as before. Its keys also read as snake_case attributes. A key named like a dict method (`items`, `keys`, `get`) reads only by index, as `r["items"]`.
 
 - An action returns a `SyncApplyActionResponse`: `r.validation.result` (or `r.validation["result"]`) and `r.edits`. An action that needs approval is not applied yet: `r.status` is `"pending_approval"`, `r.approval_id` names the request, and `validation` and `edits` are `None`.
 - `actions.<action>.validate(...)` returns a `ValidateActionResponse` (`result`, `submission_criteria`, `parameters`) and writes nothing.
 - A batch returns a `BatchApplyActionResponse` (`results`, `edits`).
 
-A geopoint property is a `GeoPoint`: the server's `"lat,lon"` text with `latitude` and `longitude`. A query whose output type is an object returns that object's class, an object set an `ObjectSet` (read again, as you, when you iterate it), a list of objects a list of the class, and a struct a dict.
+A geopoint property stored as `"lat,lon"` is a `GeoPoint`: that text, with `latitude` and `longitude`. One the server sends as GeoJSON stays as sent. A query whose output type is an object returns that object's class (read again as you, `None` if you can't read it), an object set an `ObjectSet` (read again, as you, when you iterate it), a list of objects a list of the class, and a struct a dict.
 
 To install both from the platform's package index, use **`--index-url` only**:
 

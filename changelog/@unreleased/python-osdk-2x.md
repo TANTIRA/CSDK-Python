@@ -1,4 +1,6 @@
 - A generated `FoundryClient` has the platform API (`datasets`, `sql`) next to `ontology`.
-- `Config(default_headers=, proxies=, verify=, timeout=)` for `ConvergeClient` and `FoundryClient`; an `Authorization` header is refused and `verify=False` warns.
+- `Config(default_headers=, proxies=, verify=, timeout=)` for `ConvergeClient` and `FoundryClient`; `Authorization`, `Host`, `Proxy-Authorization` and the framing headers are refused, header names are lowercased, an `http`/`all` proxy must be local, a CA file must be PEM, and `verify=False` raises `InsecureConfigWarning` at creation and on the first request.
 - Action results are `SyncApplyActionResponse` / `BatchApplyActionResponse` dicts with attribute access, including `status` and `approval_id` for an action pending approval; `Action.validate()` returns a `ValidateActionResponse`.
 - `GeoPoint` for geopoint properties and query outputs; queries with a declared output type return typed objects, object sets and lists.
+- Behaviour change: an action result was a `SimpleNamespace` and is now a dict. `vars(r)` is `{}`, and `json.dumps(r)` works, including the new `status` and `approval_id` keys.
+- A query's object output is read again as the caller (search on the primary key), and is `None` when it can't be read. A geopoint sent as GeoJSON is left as sent.

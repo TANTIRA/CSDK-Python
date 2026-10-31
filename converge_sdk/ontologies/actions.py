@@ -1,8 +1,13 @@
 """Actions (single and batch) and queries."""
+import re
+
 from ..core.transport import quote
-from .objects import GeoPoint, Object, ObjectSet, bare_key
+from .objects import GeoPoint, Object, ObjectSet
 from .responses import BatchApplyActionResponse, SyncApplyActionResponse, ValidateActionResponse
-from .where import Property
+from .where import Property, Where, join
+
+# an eq value the server reads as an object reference or an IRI rather than as text
+_REF_VALUE = re.compile(r"[A-Za-z]+/[A-Za-z0-9_-]+")
 
 
 class ActionMode:
@@ -85,6 +90,8 @@ class BatchAction(Action):
         r = self._o.request("POST", "/actions/" + quote(self._api_name) + "/applyBatch", body) or {}
         return BatchApplyActionResponse(results=r.get("results"), edits=r.get("edits"))
 
+    validate = None  # a batch has no validate-only mode
+
 
 class Query(Action):
     """A query (function): runs as the caller, read-only; returns its value.
@@ -92,6 +99,8 @@ class Query(Action):
     ``output``: the query type's output data type, from generated code. An object comes back as
     its class, an objectSet as an ObjectSet, an array or set as a list of those, a geopoint as a
     GeoPoint; anything else (a struct is a dict) as sent."""
+
+    validate = None  # a query writes nothing
 
     def __init__(self, ontology, api_name, params=None, output=None):
         super().__init__(ontology, api_name, params)
@@ -114,8 +123,9 @@ def _typed(o, dt, v):
     cls = o.classes.get(dt.get("objectTypeApiName") or dt.get("objectApiName"))
     if cls is None or t not in ("object", "objectSet"):
         return v
-    if t == "object":  # the object, or its primary key: then read it as the caller
-        return cls(v, o) if isinstance(v, dict) else ObjectSet(o, cls).get(v)
+    if t == "object":  # never built from the payload: read again, as the caller (None if not readable)
+        found = _object_set(o, cls, [v])
+        return next(iter(found.take(1)), None) if isinstance(found, ObjectSet) else v
     return _object_set(o, cls, v)
 
 
@@ -130,7 +140,17 @@ def _object_set(o, cls, v):
     pk = cls.object_type._primary_key
     if not isinstance(items, list) or pk is None:
         return v
-    keys = [x.get(pk) if isinstance(x, dict) else bare_key(x) for x in items]
-    # an empty set: no object has a null primary key
-    where = Property(pk).in_(keys) if keys else Property(pk).is_null()
-    return ObjectSet(o, cls).where(where)
+    prefix = cls.object_type._api_name.lower() + "/"
+    # keys keep their type (eq 5 and eq "5" match different values); a $rid of this type loses its prefix
+    keys = [x.get(pk) if isinstance(x, dict) else
+            x[len(prefix):] if isinstance(x, str) and x.startswith(prefix) else x for x in items]
+    if not keys:  # an empty set: no object has a null primary key
+        return ObjectSet(o, cls).where(Property(pk).is_null())
+    return ObjectSet(o, cls).where(Where(join("or", [_key_eq(pk, k) for k in keys])))
+
+
+def _key_eq(pk, k):
+    """eq on the primary key, as a full-value regex where eq would read the key as a reference."""
+    if isinstance(k, str) and (_REF_VALUE.fullmatch(k) or k.startswith(("http://", "https://"))):
+        return Property(pk).regex(re.sub(r"([.*+?^${}()|\[\]\\])", r"\\\1", k))._wire
+    return Property(pk)._cmp("eq", k)._wire
