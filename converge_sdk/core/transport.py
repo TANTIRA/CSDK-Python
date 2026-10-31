@@ -5,10 +5,13 @@ API never redirects, so every redirect is refused: the token never leaves
 for another host.
 """
 import json
+import os
+import ssl
 import urllib.error
 import urllib.parse
 import urllib.request
 
+from .config import Config, insecure_warning
 from .errors import ConfigError, ConvergeRPCError
 
 _LOCAL = {"localhost", "127.0.0.1", "::1"}
@@ -20,6 +23,26 @@ class _NoRedirect(urllib.request.HTTPRedirectHandler):
 
 
 _OPENER = urllib.request.build_opener(_NoRedirect)
+
+
+def _opener(config):
+    """The default opener, or one with the Config's proxies and TLS verification."""
+    if config.proxies is None and config.verify is True:
+        return _OPENER
+    handlers = [_NoRedirect]
+    if config.proxies is not None:
+        handlers.append(urllib.request.ProxyHandler(config.proxies))
+    if config.verify is not True:
+        if config.verify is False:
+            ctx = ssl.create_default_context()
+            ctx.check_hostname = False
+            ctx.verify_mode = ssl.CERT_NONE
+        elif os.path.isdir(config.verify):
+            ctx = ssl.create_default_context(capath=config.verify)
+        else:
+            ctx = ssl.create_default_context(cafile=config.verify)
+        handlers.append(urllib.request.HTTPSHandler(context=ctx))
+    return urllib.request.build_opener(*handlers)
 
 
 def parse(raw):
@@ -39,7 +62,7 @@ def quote(s):
 class Transport:
     """Requests against one API base URL (e.g. ``https://host/api``)."""
 
-    def __init__(self, base, auth, timeout=60):
+    def __init__(self, base, auth, timeout=60, config=None):
         # the one place a base URL is accepted: never a bearer token over plain http
         u = urllib.parse.urlsplit(base)
         if u.username is not None or u.password is not None:
@@ -51,7 +74,13 @@ class Transport:
                               " localhost)" % (u.scheme or "?", u.hostname))
         self.base = base.rstrip("/")
         self._auth = auth
-        self._timeout = timeout
+        config = config if config is not None else Config()
+        if not isinstance(config, Config):
+            raise ConfigError("config is a converge_sdk.Config")
+        self._timeout = config.timeout if config.timeout is not None else timeout
+        self._headers = dict(config.default_headers)  # a later change to the Config's dict skips no check
+        self._opener = _opener(config)
+        self._insecure = config.verify is False  # warns again on the first request
 
     def __repr__(self):
         return "Transport(%r)" % self.base
@@ -66,10 +95,13 @@ class Transport:
 
     def send(self, method, url, data=None, headers=None):
         """The raw response bytes of one request to a full URL."""
+        if self._insecure:
+            self._insecure = False
+            insecure_warning(stacklevel=4)
         req = urllib.request.Request(url, data=data, method=method, headers={
-            "Authorization": "Bearer " + self._auth._get(), **(headers or {})})
+            **self._headers, "Authorization": "Bearer " + self._auth._get(), **(headers or {})})
         try:
-            with _OPENER.open(req, timeout=self._timeout) as res:
+            with self._opener.open(req, timeout=self._timeout) as res:
                 return res.read()
         except urllib.error.HTTPError as e:
             if 300 <= e.code < 400:  # one the redirect handler does not follow (300, 304, ...)

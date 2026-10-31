@@ -8,9 +8,10 @@
     o = client.ontology("my-ontology")
     o.objects("Order").take(10)
 """
-from .core import ConfigError, ConvergeError, ConvergeRPCError, Transport, UserTokenAuth, resolve
+from .core import Config, ConfigError, ConvergeError, ConvergeRPCError, Transport, UserTokenAuth, resolve
 from .datasets import DatasetsClient, SqlClient, SqlError
-from .ontologies import (ActionConfig, ActionMode, BatchActionConfig, OntologyClient, ReturnEditsMode,
+from .ontologies import (ActionConfig, ActionMode, BatchActionConfig, BatchApplyActionResponse, GeoPoint,
+                         OntologyClient, ReturnEditsMode, SyncApplyActionResponse, ValidateActionResponse,
                          prop)
 
 __version__ = "0.1.0"
@@ -18,9 +19,10 @@ __version__ = "0.1.0"
 
 class ConvergeClient:
     """``hostname`` is the API base, e.g. ``https://converge.example.com/api``. ``auth``, instead
-    of ``token``: a UserTokenAuth, a token, or a callable returning one per request."""
+    of ``token``: a UserTokenAuth, a token, or a callable returning one per request. ``config``:
+    a Config (default headers, proxies, TLS verification, timeout)."""
 
-    def __init__(self, hostname=None, token=None, auth=None, timeout=60, config_file=None):
+    def __init__(self, hostname=None, token=None, auth=None, timeout=60, config_file=None, config=None):
         if auth is None:
             base, tok = resolve(hostname, token, config_file)
             auth = UserTokenAuth(tok)
@@ -28,7 +30,7 @@ class ConvergeClient:
             base, _ = resolve(hostname, "unused", config_file)
             if not isinstance(auth, UserTokenAuth):
                 auth = UserTokenAuth(auth)
-        self._transport = Transport(base, auth, timeout)
+        self._transport = Transport(base, auth, timeout, config)
         self.datasets = DatasetsClient(self._transport)
         self.sql = SqlClient(self._transport)
 
@@ -44,6 +46,7 @@ class ConvergeClient:
         return "ConvergeClient(%r)" % self._transport.base
 
 
-__all__ = ["ActionConfig", "ActionMode", "BatchActionConfig", "ConfigError", "ConvergeClient",
-           "ConvergeError", "ConvergeRPCError", "DatasetsClient", "OntologyClient", "ReturnEditsMode",
-           "SqlClient", "SqlError", "UserTokenAuth", "prop", "__version__"]
+__all__ = ["ActionConfig", "ActionMode", "BatchActionConfig", "BatchApplyActionResponse", "Config",
+           "ConfigError", "ConvergeClient", "ConvergeError", "ConvergeRPCError", "DatasetsClient", "GeoPoint",
+           "OntologyClient", "ReturnEditsMode", "SqlClient", "SqlError", "SyncApplyActionResponse",
+           "UserTokenAuth", "ValidateActionResponse", "prop", "__version__"]

@@ -3,6 +3,7 @@ package builds from its registrations."""
 import types
 
 from ..core.auth import UserTokenAuth
+from ..datasets import DatasetsClient, SqlClient
 from ..core.config import resolve
 from ..core.transport import Transport
 from .actions import Action, BatchAction, Query
@@ -41,13 +42,17 @@ def client_class(ontology_rid, object_types, action_types, query_types=None, nam
     """The client class of a generated package.
 
     ``object_types``: python name -> Object subclass; ``action_types`` and
-    ``query_types``: python name -> (api name, {python param: (wire name, required)})."""
+    ``query_types``: python name -> (api name, {python param: (wire name, required)}); a query
+    may add a third item, its output data type, for a typed return value.
+
+    The client has the platform API next to ``.ontology``: ``.datasets`` and ``.sql``, as on
+    ConvergeClient. ``config``: a Config (default headers, proxies, TLS verification, timeout)."""
     object_types = dict(object_types)
     action_types = dict(action_types)
     query_types = dict(query_types or {})
     by_api = {c.object_type._api_name: c for c in object_types.values()}
 
-    def __init__(self, hostname=None, auth=None, timeout=60):
+    def __init__(self, hostname=None, auth=None, timeout=60, config=None):
         if auth is None:
             hostname, token = resolve(hostname)
             auth = UserTokenAuth(token)
@@ -57,13 +62,16 @@ def client_class(ontology_rid, object_types, action_types, query_types=None, nam
             if hostname is None:
                 hostname, _ = resolve(None, token="unused")
         base = hostname if "://" in hostname else "https://" + hostname
-        o = Ontology(Transport(base, auth, timeout), ontology_rid, by_api)
+        transport = Transport(base, auth, timeout, config)
+        o = Ontology(transport, ontology_rid, by_api)
+        self.datasets = DatasetsClient(transport)
+        self.sql = SqlClient(transport)
         self.ontology = types.SimpleNamespace(
             objects=types.SimpleNamespace(**{k: ObjectSet(o, c) for k, c in object_types.items()}),
             actions=types.SimpleNamespace(**{k: Action(o, w, p) for k, (w, p) in action_types.items()}),
             batch_actions=types.SimpleNamespace(**{k: BatchAction(o, w, p)
                                                    for k, (w, p) in action_types.items()}),
-            queries=types.SimpleNamespace(**{k: Query(o, w, p) for k, (w, p) in query_types.items()}),
+            queries=types.SimpleNamespace(**{k: Query(o, *spec) for k, spec in query_types.items()}),
             attachments=Attachments(o),
             media=MediaClient(o),
         )
