@@ -49,8 +49,11 @@ def client_class(ontology_rid, object_types, action_types, query_types=None, nam
         if auth is None:
             hostname, token = resolve(hostname)
             auth = UserTokenAuth(token)
-        elif hostname is None:
-            hostname, _ = resolve(None, token="unused")
+        else:
+            if not isinstance(auth, UserTokenAuth):
+                auth = UserTokenAuth(auth)
+            if hostname is None:
+                hostname, _ = resolve(None, token="unused")
         base = hostname if "://" in hostname else "https://" + hostname
         o = Ontology(Transport(base, auth, timeout), ontology_rid, by_api)
         self.ontology = types.SimpleNamespace(

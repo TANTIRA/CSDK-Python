@@ -1,10 +1,13 @@
 """Where clauses and property references.
 
 The server's where grammar is eq, gt, gte, lt, lte, range, regex, isNull,
-and, or, not. ``~``, ``!=`` and ``is_null(False)`` become ``not``, and
-``in_`` (the server has no ``in``) becomes an ``or`` of ``eq``. and/or stay
-flat and ``~~`` cancels, because the server caps where depth at 5.
+and, or, not. ``~``, ``!=`` and ``is_null(False)`` become ``not``; ``== None``
+is ``is_null()`` and ``!= None`` is ``is_null(False)``; ``starts_with`` is a
+full-match regex; ``in_`` (the server has no ``in``) becomes an ``or`` of
+``eq``. and/or stay flat and ``~~`` cancels, because the server caps where
+depth at 5.
 """
+import re
 
 
 class Where:
@@ -57,11 +60,11 @@ class Property:
         return Where({"type": op, "property": self._wire, "value": value})
 
     def __eq__(self, v):
-        return self._cmp("eq", v)
+        return self.is_null() if v is None else self._cmp("eq", v)
 
     def __ne__(self, v):
-        # also true for an object with no value, like Foundry's not(eq)
-        return ~self._cmp("eq", v)
+        # not(eq): also true for an object with no value for the property
+        return self.is_null(False) if v is None else ~self._cmp("eq", v)
 
     def __gt__(self, v):
         return self._cmp("gt", v)
@@ -88,6 +91,10 @@ class Property:
 
     def regex(self, pattern):
         return self._cmp("regex", pattern)
+
+    def starts_with(self, prefix):
+        # a full-match regex on the server; [\s\S] so multi-line values match too
+        return self._cmp("regex", re.sub(r"([.*+?^${}()|\[\]\\])", r"\\\1", str(prefix)) + "[\\s\\S]*")
 
     def is_null(self, value=True):
         # the server reads every isNull as "is null", so not-null is not(isNull)

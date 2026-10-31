@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "converge-sdk"
 version = "0.1.0"
-description = "Python SDK for the Converge platform REST API (standard library only)"
+description = "Converge SDK: the Converge platform's REST API from Python, with no dependencies."
 readme = "README.md"
 license = "Apache-2.0"
 license-files = ["LICENSE", "NOTICE"]

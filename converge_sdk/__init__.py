@@ -17,7 +17,8 @@ __version__ = "0.1.0"
 
 
 class ConvergeClient:
-    """``hostname`` is the API base, e.g. ``https://converge.example.com/api``."""
+    """``hostname`` is the API base, e.g. ``https://converge.example.com/api``. ``auth``, instead
+    of ``token``: a UserTokenAuth, a token, or a callable returning one per request."""
 
     def __init__(self, hostname=None, token=None, auth=None, timeout=60, config_file=None):
         if auth is None:
@@ -25,9 +26,16 @@ class ConvergeClient:
             auth = UserTokenAuth(tok)
         else:
             base, _ = resolve(hostname, "unused", config_file)
+            if not isinstance(auth, UserTokenAuth):
+                auth = UserTokenAuth(auth)
         self._transport = Transport(base, auth, timeout)
         self.datasets = DatasetsClient(self._transport)
         self.sql = SqlClient(self._transport)
+
+    @property
+    def transport(self):
+        """The transport, for routes the SDK does not wrap (``request(method, path, body)``)."""
+        return self._transport
 
     def ontology(self, ontology_rid):
         return OntologyClient(self._transport, ontology_rid)

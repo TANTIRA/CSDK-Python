@@ -46,11 +46,11 @@ Only the project owner does these steps. Nobody else creates accounts, tokens or
 2. In this repository, create the environment `pypi` (*Settings → Environments*). Optionally require a reviewer.
 3. Set the repository variable `PYPI_TRUSTED_PUBLISHING` to `true` (*Settings → Secrets and variables → Actions → Variables*).
 
-From then on, pushing a `v*` tag tests, builds, checks and publishes. Until the variable is set, the publish job is skipped rather than failed, and the build job still runs and keeps the dists as an artifact. The workflow also refuses a tag that does not match the package version.
+From then on, pushing a `v*` tag tests, builds, checks and publishes. Trusted publishing also uploads digital attestations (PEP 740), which PyPI shows on each file. Until the variable is set, the publish job is skipped rather than failed, and the build job still runs and keeps the dists as an artifact. The workflow also refuses a tag that does not match the package version.
 
 ## The TypeScript SDK
 
-The same owner should claim the npm scope `@converge` (or use `@tantira/converge-sdk` if it is taken). It is published from that repository with `npm publish --access public` and a 2FA one-time password, as described there.
+It is `@convergehq/sdk`, published by an owner of the npm organization `convergehq` (`@converge` belongs to someone else on npm). Its first release is manual, with 2FA; later ones go through npm trusted publishing with provenance (path B in RELEASING.md of TANTIRA/CSDK-Typescript).
 
 ## Platform copy
 
