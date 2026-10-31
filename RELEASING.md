@@ -50,7 +50,7 @@ From then on, pushing a `v*` tag tests, builds, checks and publishes. Until the 
 
 ## The TypeScript SDK
 
-The same owner should claim the npm scope `@converge` (or use `@tantira/converge-sdk` if it is taken). It is published from that repository with `npm publish --access public` and a 2FA one-time password, as described there.
+It is `@convergehq/sdk`, published by an owner of the npm organization `convergehq` (`@converge` belongs to someone else on npm). See RELEASING.md in TANTIRA/CSDK-Typescript.
 
 ## Platform copy
 
