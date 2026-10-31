@@ -1,0 +1,1 @@
+- `ObjectSet.nearest_neighbors(query, num_neighbors, prop)`: exact cosine nearest neighbors over a vector property.

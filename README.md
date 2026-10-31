@@ -104,6 +104,8 @@ o.objects("Order").aggregate(
 
 Time buckets are in UTC, weeks start on Monday, and months, quarters and years follow the calendar. `max_group_count` keeps the largest groups and marks the answer `APPROXIMATE`. An aggregate may produce at most 10,000 groups.
 
+`o.objects("Doc").nearest_neighbors(embedding, 10, "embedding")` returns the objects whose vector property is closest to `embedding` (exact cosine similarity, as `$score`, best first), among the objects you may read; the set's filter applies. The query must have exactly the property's `vectorDimension` numbers, and `num_neighbors` is 1 to 500.
+
 ## Generated ontology packages
 
 Your platform generates a typed package per ontology, with classes for your object types, keyword-checked actions and queries. That package depends on `converge-sdk` and contains only the types:
