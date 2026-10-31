@@ -104,8 +104,26 @@ class TypedClientTest(unittest.TestCase):
         self.assertEqual([b.get("applyModifiers") for b in bodies], [wire, wire, wire, both, both, None])
         with self.assertRaises(ValueError):
             orders.page(apply_modifiers={"total": "reduce"})
-        with self.assertRaises(TypeError):
-            orders.page(apply_modifiers=["total"])
+        with self.assertRaises(ValueError):
+            orders.page(apply_modifiers={})
+        for bad in (["total"], {1: "applyReducers"}, [(None, "applyReducers")]):
+            with self.assertRaises(TypeError):
+                orders.page(apply_modifiers=bad)
+
+    def test_apply_modifiers_map_properties_to_api_names(self):
+        class Site(Object):
+            object_type = ObjectType("Order", "id", {"last_reading": "lastReading", "total": "total"})
+        site = Site.object_type
+        orders = self.c.ontology.objects.Order
+        # a Property is unhashable (== builds a clause), so it goes in (property, modifier) pairs
+        orders.page(apply_modifiers=[(Order.object_type.total, "applyReducers")])
+        from converge_sdk.ontologies.objects import ObjectSet
+        s = ObjectSet(orders._o, Site)
+        s.page(apply_modifiers={"last_reading": "applyReducers"})
+        s.page(apply_modifiers=[(site.last_reading, "applyMainValue")])
+        self.assertEqual([b["applyModifiers"] for b in self.stub.json_bodies()],
+                         [{"total": "applyReducers"}, {"lastReading": "applyReducers"},
+                          {"lastReading": "applyMainValue"}])
 
     def test_where_none_starts_with_and_set_edges(self):
         total, oid = Order.object_type.total, Order.object_type.orderId

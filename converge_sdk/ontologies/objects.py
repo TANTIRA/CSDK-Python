@@ -116,11 +116,27 @@ def untyped_class(api_name, primary_key=None):
 MODIFIERS = ("applyReducers", "applyMainValue", "applyReducersAndExtractMainValue")
 
 
-def _modifiers(apply_modifiers):
-    """{property name: modifier} -> the wire body, checked here so a typo fails before the request."""
-    if not isinstance(apply_modifiers, dict):
-        raise TypeError("apply_modifiers takes {property: modifier}")
-    out = dict(apply_modifiers)
+def _modifiers(apply_modifiers, object_type=None):
+    """{property: modifier}, or (property, modifier) pairs since a Property is unhashable,
+    -> the wire's {API name: modifier}, checked here so a typo fails before the request.
+    A property is a Property or a name (a generated Python name maps to its API name)."""
+    if isinstance(apply_modifiers, dict):
+        pairs = list(apply_modifiers.items())
+    elif isinstance(apply_modifiers, (list, tuple)) and all(
+            isinstance(x, (list, tuple)) and len(x) == 2 for x in apply_modifiers):
+        pairs = list(apply_modifiers)
+    else:
+        raise TypeError("apply_modifiers takes {property: modifier} or (property, modifier) pairs")
+    names = object_type._props if object_type is not None else {}
+    out = {}
+    for p, m in pairs:
+        w = wire_prop(p)
+        w = names.get(w, w) if isinstance(w, str) and not isinstance(p, Property) else w
+        if not isinstance(w, str) or not w:
+            raise TypeError("apply_modifiers: %r is not a property" % (p,))
+        out[w] = m
+    if not out:
+        raise ValueError("apply_modifiers: name at least one property")
     bad = [m for m in out.values() if m not in MODIFIERS]
     if bad:
         raise ValueError("apply_modifiers: %r is not one of %s" % (bad[0], ", ".join(MODIFIERS)))
@@ -157,7 +173,7 @@ class ObjectSet:
                          [wire_prop(p) for p in properties])
 
     def page(self, page_size=None, page_token=None, apply_modifiers=None):
-        """One page. ``apply_modifiers`` ({property name: modifier}, MODIFIERS) reads an array
+        """One page. ``apply_modifiers`` ({property: modifier}, MODIFIERS) reads an array
         property as its reduced element and a struct as its main value; filters and order
         still use the full value. The object type configures reducers / main values."""
         body = {"pageSize": page_size or 50}
@@ -170,7 +186,7 @@ class ObjectSet:
         if self._select is not None:
             body["select"] = self._select
         if apply_modifiers is not None:
-            body["applyModifiers"] = _modifiers(apply_modifiers)
+            body["applyModifiers"] = _modifiers(apply_modifiers, self._cls.object_type)
         r = self._o.request("POST", self._path("/search"), body) or {}
         return Page([self._cls(o, self._o) for o in r.get("data") or []], r.get("nextPageToken"),
                     r.get("totalCount"))
