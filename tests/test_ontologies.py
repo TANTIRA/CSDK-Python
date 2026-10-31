@@ -111,6 +111,17 @@ class TypedClientTest(unittest.TestCase):
             with self.assertRaises(TypeError):
                 orders.order_by(bad)
         self.assertIsInstance(orders.count().compute(), int)
+        from converge_sdk.ontologies import duration, max_group_count, metric
+        orders.aggregate(metrics=[metric("count"), metric("sum", Order.object_type.total, "t")],
+                         group_by=[duration(Order.object_type.orderId, 1, "MONTHS"),
+                                   max_group_count(Order.object_type.orderId, 3)], order=("t", "desc"))
+        self.assertEqual(self.stub.json_bodies()[-1], {"aggregation": {
+            "metrics": [{"type": "count"}, {"type": "sum", "field": "total", "name": "t"}],
+            "order": {"metric": "t", "direction": "desc"},
+            "group_by": [{"field": "orderId", "duration": 1, "unit": "MONTHS"},
+                         {"field": "orderId", "maxGroupCount": 3}]}})
+        with self.assertRaises(TypeError):
+            orders.aggregate("count", metrics=[metric("count")])
         self.c.ontology.actions.place_order(order_id="o9", action_config=ActionConfig())
         self.assertNotIn("options", self.stub.json_bodies()[-1])
 
