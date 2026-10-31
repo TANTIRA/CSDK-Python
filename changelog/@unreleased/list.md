@@ -1,0 +1,1 @@
+- `ObjectSet.list()` returns every object in the set.
