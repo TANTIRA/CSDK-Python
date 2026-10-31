@@ -72,6 +72,22 @@ value = o.query("customer_lifetime_value")(customer_rid="customer/c1")
 att = o.attachments.upload(b"...", "invoice.pdf", "application/pdf")
 ```
 
+### Media properties
+
+A media reference property names an item in a media set. In a generated package it is a `Media`; without generated code, read it with `o.media.get(object_type, primary_key, property)`:
+
+```python
+photo = o.media.get("Order", "o1", "photo")
+data = photo.get_media_content()        # bytes
+meta = photo.get_media_metadata()       # .path, .size_bytes, .media_type
+ref = photo.get_media_reference()       # the MediaReference the property holds
+
+ref = o.media.upload("Order", "photo", png_bytes, media_item_path="orders/o9.png")
+o.action("set_photo")(order_id="o9", photo=ref)   # an action writes it to the property
+```
+
+The server checks the object and the media set before it answers. The content is untrusted: never render it inline in a page served from the API's origin.
+
 The where grammar has `==`, `<`, `<=`, `>`, `>=`, `in_`, `range`, `regex`, `starts_with` and `is_null()`, combined with `&` and `|`. `== None` is `is_null()`. `~` negates a clause; `!=` and `is_null(False)` are negations too, so `!=` also matches objects with no value. On one object type, `|` is a union, `&` an intersection, and `a & ~b` subtracts `b` from `a`. Pages hold 1 to 1000 objects; use `page`, `iterate` or `take`.
 
 ## Generated ontology packages
@@ -97,7 +113,7 @@ Do not add `--extra-index-url` for public PyPI in the same install. pip would th
 
 ## Not available yet
 
-Dataset views, projections, retention policies, Iceberg tables, set operations across object types, media properties, and the SQL job list. The SDK only calls routes the server has today.
+Dataset views, projections, retention policies, Iceberg tables, set operations across object types, and the SQL job list. The SDK only calls routes the server has today.
 
 ## License
 
