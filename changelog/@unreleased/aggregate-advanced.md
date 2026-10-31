@@ -1,0 +1,1 @@
+- Aggregates: `aggregate(metrics=[...], order=...)` computes several metrics at once and orders the groups; `duration(p, n, unit)` and `max_group_count(p, n)` group_by entries.

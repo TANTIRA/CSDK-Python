@@ -92,6 +92,18 @@ The server checks the object and the media set before it answers. The content is
 
 The where grammar has `==`, `<`, `<=`, `>`, `>=`, `in_`, `range`, `regex`, `starts_with`, `is_null()` and the text search methods `contains_any_term`, `contains_all_terms`, `contains_all_terms_in_order` and `contains_all_terms_in_order_prefix_last_term` (whole words, case-insensitive), combined with `&` and `|`. `== None` is `is_null()`. `~` negates a clause; `!=` and `is_null(False)` are negations too, so `!=` also matches objects with no value. On one object type, `|` is a union, `&` an intersection, and `a & ~b` subtracts `b` from `a`. Pages hold 1 to 1000 objects; use `page`, `iterate`, `take` or `list` (every object). `aggregate()` returns the server's answer as a dict, so there is nothing to convert.
 
+```python
+from converge_sdk.ontologies import duration, max_group_count, metric
+
+o.objects("Order").aggregate(
+    metrics=[metric("count"), metric("sum", prop("total"), "total")],
+    group_by=[duration(prop("placed_at"), 1, "MONTHS"), max_group_count(prop("status"), 5)],
+    order=("total", "desc"),
+)
+```
+
+Time buckets are in UTC, weeks start on Monday, and months, quarters and years follow the calendar. `max_group_count` keeps the largest groups and marks the answer `APPROXIMATE`. An aggregate may produce at most 10,000 groups.
+
 ## Generated ontology packages
 
 Your platform generates a typed package per ontology, with classes for your object types, keyword-checked actions and queries. That package depends on `converge-sdk` and contains only the types:

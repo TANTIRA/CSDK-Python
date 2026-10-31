@@ -165,12 +165,23 @@ class ObjectSet:
             k = self._cls.object_type._api_name.lower() + "/" + k
         return self._cls(self._o.request("GET", self._path("/" + quote(k))), self._o)
 
-    def aggregate(self, type, field=None, group_by=None):
+    def aggregate(self, type=None, field=None, group_by=None, metrics=None, order=None):
         """count | sum | avg | min | max | exactDistinct | approximateDistinct over this set.
 
         A group_by entry is a property, or ``{"field": p, "ranges": [[lo, hi], ...]}``
-        / ``{"field": p, "fixedWidth": w}``."""
-        agg = {"type": type}
+        / ``{"field": p, "fixedWidth": w}`` / ``duration(p, n, unit)`` / ``max_group_count(p, n)``.
+        Instead of type and field, ``metrics=[metric("count"), metric("sum", p, "total")]``
+        computes several at once; ``order=("total", "desc")`` orders the groups by one."""
+        if metrics is None:
+            agg = {"type": type or "count"}
+        elif type is not None or field is not None:
+            raise TypeError("aggregate: pass type/field or metrics, not both")
+        else:
+            agg = {"metrics": [{**m, "field": wire_prop(m["field"])} if m.get("field") is not None else dict(m)
+                               for m in metrics]}
+        if order is not None:
+            name, direction = (order, "asc") if isinstance(order, str) else order
+            agg["order"] = {"metric": name, "direction": direction}
         if self._filter:
             agg["where"] = self._filter
         if field is not None:
@@ -185,6 +196,27 @@ class ObjectSet:
             data = (self.aggregate("count") or {}).get("data") or []
             return int(float(data[0]["metrics"][0]["value"])) if data else 0
         return Compute(run)
+
+
+def duration(prop, n, unit):
+    """A date/time bucket group_by entry: n SECONDS | MINUTES | HOURS | DAYS | WEEKS | MONTHS |
+    QUARTERS | YEARS, in UTC (weeks start on Monday)."""
+    return {"field": prop, "duration": n, "unit": unit}
+
+
+def max_group_count(prop, n):
+    """An exact group_by entry keeping the n largest groups (the answer is then APPROXIMATE)."""
+    return {"field": prop, "maxGroupCount": n}
+
+
+def metric(type, field=None, name=None):
+    """One metric for aggregate(metrics=...)."""
+    m = {"type": type}
+    if field is not None:
+        m["field"] = field
+    if name is not None:
+        m["name"] = name
+    return m
 
 
 def bare_key(primary_key):
