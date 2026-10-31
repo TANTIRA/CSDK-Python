@@ -1,0 +1,4 @@
+- A generated `FoundryClient` has the platform API (`datasets`, `sql`) next to `ontology`.
+- `Config(default_headers=, proxies=, verify=, timeout=)` for `ConvergeClient` and `FoundryClient`; an `Authorization` header is refused and `verify=False` warns.
+- Action results are `SyncApplyActionResponse` / `BatchApplyActionResponse` dicts with attribute access, including `status` and `approval_id` for an action pending approval; `Action.validate()` returns a `ValidateActionResponse`.
+- `GeoPoint` for geopoint properties and query outputs; queries with a declared output type return typed objects, object sets and lists.

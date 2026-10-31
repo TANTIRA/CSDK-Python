@@ -44,6 +44,23 @@ client = ConvergeClient()   # from the environment or ~/.converge/config
 
 A generated package's `FoundryClient()` takes no arguments the same way. The client uses the standard `HTTPS_PROXY` and `NO_PROXY` variables, and the system's certificate store for TLS.
 
+### HTTP options: `Config`
+
+As in foundry-platform-python, `config=Config(...)` sets headers, proxies, TLS verification and the timeout. Both `ConvergeClient` and a generated `FoundryClient` take it:
+
+```python
+from converge_sdk import Config
+
+config = Config(default_headers={"X-Team": "ops"}, proxies={"https": "http://proxy.corp:3128"},
+                verify="/etc/ssl/corp-ca.pem", timeout=30)
+client = ConvergeClient(config=config)
+```
+
+- `default_headers` go on every request. `Authorization` is refused with a `ConfigError`: the token comes from `token` or `auth` only.
+- `proxies` maps a scheme to a proxy URL, as urllib's `ProxyHandler` takes it. `{}` turns the proxy environment variables off.
+- `verify` is `True` (the system store), the path of a CA bundle file or directory, or `False`. `False` checks no certificate at all and warns, because anyone on the network path could then read your token. Use a CA bundle instead.
+- `timeout`, in seconds, overrides the client's `timeout`.
+
 ## Datasets
 
 ```python
@@ -115,7 +132,16 @@ from ontology_sdk import FoundryClient, Order   # names kept for existing code
 
 client = FoundryClient("https://converge.example.com/api")   # or pass auth=UserTokenAuth(token)
 client.ontology.objects.Order.where(Order.object_type.total > 5).take(10)
+client.datasets.get("ri.example.dataset.1")                  # the platform API on the same client
 ```
+
+The response types have their Python OSDK 2.x names. Each is a dict, so it serialises to JSON and indexes as before, and its keys also read as snake_case attributes:
+
+- An action returns a `SyncApplyActionResponse`: `r.validation.result` (or `r.validation["result"]`) and `r.edits`. An action that needs approval is not applied yet: `r.status` is `"pending_approval"`, `r.approval_id` names the request, and `validation` and `edits` are `None`.
+- `actions.<action>.validate(...)` returns a `ValidateActionResponse` (`result`, `submission_criteria`, `parameters`) and writes nothing.
+- A batch returns a `BatchApplyActionResponse` (`results`, `edits`).
+
+A geopoint property is a `GeoPoint`: the server's `"lat,lon"` text with `latitude` and `longitude`. A query whose output type is an object returns that object's class, an object set an `ObjectSet` (read again, as you, when you iterate it), a list of objects a list of the class, and a struct a dict.
 
 To install both from the platform's package index, use **`--index-url` only**:
 

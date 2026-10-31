@@ -1,4 +1,6 @@
 """Object types, objects, object sets and linked objects."""
+import json
+
 from ..core.transport import quote
 from .media import Media, _reference
 from .where import Property, clause, join, wire_prop
@@ -19,15 +21,53 @@ class Ontology:
         return self.transport.request(method, self.base + path, body)
 
 
+class GeoPoint(str):
+    """A geopoint: the server's ``"lat,lon"`` text (so it compares and serialises as before),
+    with ``latitude`` and ``longitude`` as floats."""
+
+    def __new__(cls, latitude, longitude):
+        lat, lon = float(latitude), float(longitude)
+        if not (-90 <= lat <= 90 and -180 <= lon <= 180):
+            raise ValueError("a geopoint is latitude -90..90, longitude -180..180")
+        self = super().__new__(cls, "%s,%s" % (latitude, longitude))
+        self.latitude, self.longitude = lat, lon
+        return self
+
+    @classmethod
+    def from_wire(cls, value):
+        """``"lat,lon"`` or a GeoJSON Point (a dict, or its JSON text) -> GeoPoint; else None."""
+        try:
+            if isinstance(value, str) and value.strip()[:1] == "{":
+                value = json.loads(value)
+            if isinstance(value, dict):
+                if value.get("type") != "Point":
+                    return None
+                lon, lat = value["coordinates"][:2]
+                return cls(lat, lon)
+            if isinstance(value, str):
+                lat, lon = (x.strip() for x in value.split(","))
+                return cls(lat, lon)
+        except (ValueError, TypeError, KeyError):
+            pass
+        return None
+
+    def __getnewargs__(self):  # copy and pickle rebuild it from its own text
+        return tuple(str(self).split(","))
+
+    def __repr__(self):
+        return "GeoPoint(latitude=%r, longitude=%r)" % (self.latitude, self.longitude)
+
+
 class ObjectType:
     """``Type.object_type.<prop>`` gives a Property for where / order_by."""
 
-    def __init__(self, api_name, primary_key, props, links=None, media=()):
+    def __init__(self, api_name, primary_key, props, links=None, media=(), geo=()):
         self._api_name = api_name
         self._primary_key = primary_key
         self._props = props  # python name -> wire name
         self._links = links or {}  # link type -> linked object type api name
         self._media = frozenset(media)  # python names of media reference properties
+        self._geo = frozenset(geo)  # python names of geopoint properties
         for py, wire in props.items():
             setattr(self, py, Property(wire))
 
@@ -45,6 +85,8 @@ class Object:
             value = raw.get(wire)
             if py in ot._media and value is not None and ontology is not None and self.rid:
                 value = Media(ontology, ot._api_name, self.rid, wire, _reference(value))
+            elif py in ot._geo and value is not None:
+                value = GeoPoint.from_wire(value) or value  # an unreadable value stays as sent
             setattr(self, py, value)
 
     @property

@@ -1,8 +1,8 @@
 """Actions (single and batch) and queries."""
-import types
-
 from ..core.transport import quote
-from .objects import Object
+from .objects import GeoPoint, Object, ObjectSet, bare_key
+from .responses import BatchApplyActionResponse, SyncApplyActionResponse, ValidateActionResponse
+from .where import Property
 
 
 class ActionMode:
@@ -62,7 +62,14 @@ class Action:
             if opts:
                 body["options"] = opts
         r = self._o.request("POST", "/actions/" + quote(self._api_name) + "/apply", body) or {}
-        return types.SimpleNamespace(validation=r.get("validation"), edits=r.get("edits"))
+        # an action that needs approval answers 202 with status / approval_id and no validation
+        return SyncApplyActionResponse(validation=r.get("validation"), edits=r.get("edits"),
+                                       status=r.get("status"), approval_id=r.get("approval_id"))
+
+    def validate(self, **kwargs):
+        """Validate only (nothing is written) -> ValidateActionResponse."""
+        r = self(action_config=ActionConfig(mode=ActionMode.VALIDATE_ONLY), **kwargs)
+        return ValidateActionResponse(r.validation or {})
 
 
 class BatchAction(Action):
@@ -76,13 +83,54 @@ class BatchAction(Action):
         if batch_action_config is not None and batch_action_config.return_edits:
             body["options"] = {"returnEdits": batch_action_config.return_edits}
         r = self._o.request("POST", "/actions/" + quote(self._api_name) + "/applyBatch", body) or {}
-        return types.SimpleNamespace(results=r.get("results"), edits=r.get("edits"))
+        return BatchApplyActionResponse(results=r.get("results"), edits=r.get("edits"))
 
 
 class Query(Action):
-    """A query (function): runs as the caller, read-only; returns its value."""
+    """A query (function): runs as the caller, read-only; returns its value.
+
+    ``output``: the query type's output data type, from generated code. An object comes back as
+    its class, an objectSet as an ObjectSet, an array or set as a list of those, a geopoint as a
+    GeoPoint; anything else (a struct is a dict) as sent."""
+
+    def __init__(self, ontology, api_name, params=None, output=None):
+        super().__init__(ontology, api_name, params)
+        self._output = output
 
     def __call__(self, **kwargs):
         r = self._o.request("POST", "/queries/" + quote(self._api_name) + "/execute",
                             {"parameters": self._parameters(kwargs)}) or {}
-        return r.get("value")
+        return _typed(self._o, self._output, r.get("value"))
+
+
+def _typed(o, dt, v):
+    t = dt.get("type") if isinstance(dt, dict) else None
+    if v is None or t is None:
+        return v
+    if t in ("array", "set"):
+        return [_typed(o, dt.get("subType"), x) for x in v] if isinstance(v, list) else v
+    if t == "geopoint":
+        return GeoPoint.from_wire(v) or v
+    cls = o.classes.get(dt.get("objectTypeApiName") or dt.get("objectApiName"))
+    if cls is None or t not in ("object", "objectSet"):
+        return v
+    if t == "object":  # the object, or its primary key: then read it as the caller
+        return cls(v, o) if isinstance(v, dict) else ObjectSet(o, cls).get(v)
+    return _object_set(o, cls, v)
+
+
+def _object_set(o, cls, v):
+    """An objectSet value (a base set, a static set, or the objects / keys as a list) as an
+    ObjectSet; it is read again, as the caller, when it is iterated.
+    shortcut: a static set is an `or` of `eq` on the primary key, so a very large one can pass
+    the server's where limits; page through the query's own output instead if that happens."""
+    if isinstance(v, dict) and v.get("type") == "base":
+        return ObjectSet(o, cls)
+    items = v.get("objects") if isinstance(v, dict) and v.get("type") == "static" else v
+    pk = cls.object_type._primary_key
+    if not isinstance(items, list) or pk is None:
+        return v
+    keys = [x.get(pk) if isinstance(x, dict) else bare_key(x) for x in items]
+    # an empty set: no object has a null primary key
+    where = Property(pk).in_(keys) if keys else Property(pk).is_null()
+    return ObjectSet(o, cls).where(where)
